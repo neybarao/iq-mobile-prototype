@@ -138,8 +138,8 @@
   #glow{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;opacity:0;mix-blend-mode:screen;
          /* a soft hole follows the orb so the glow sits behind it instead of washing over it */
          --ox:50%;--oy:120%;
-         -webkit-mask-image:radial-gradient(circle at var(--ox) var(--oy),transparent 0,transparent calc(var(--orb) * .5),#000 calc(var(--orb) * .85));
-         mask-image:radial-gradient(circle at var(--ox) var(--oy),transparent 0,transparent calc(var(--orb) * .5),#000 calc(var(--orb) * .85))}
+         -webkit-mask-image:radial-gradient(circle at var(--ox) var(--oy),transparent 0,transparent calc(var(--orb) * .4),#000 calc(var(--orb) * .52));
+         mask-image:radial-gradient(circle at var(--ox) var(--oy),transparent 0,transparent calc(var(--orb) * .4),#000 calc(var(--orb) * .52))}
   #glow.fade{transition:opacity .6s ease}
   #glow i{position:absolute;display:block;border-radius:50%;filter:blur(28px);transform-origin:50% 100%;will-change:transform,opacity;
           background:radial-gradient(closest-side,rgba(89,190,249,.9),rgba(89,190,249,.38) 55%,rgba(89,190,249,0) 100%);
