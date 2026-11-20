@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1112">
+<title>NSIQ · Voice dialogue prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>
+  :root{
+    --surface-primary:#171817; --surface-tertiary:#2e2f2f; --surface-quaternary:#3a3b3b;
+    --border-soft-primary:#464746; --border-soft-secondary:#2e2f2f; --border-bold-primary:#747675;
+    --text:#ffffff; --subtext:#c7c8c8; --disabled:#828483; --invert:#0c0c0c;
+    --critical:#f1583d; --ai-green:#57e9a3; --ai-purple:#ae8aff;
+    --font:'Hanken Grotesk', system-ui, sans-serif;
+    --status-h:54px;           /* fake iOS status bar on desktop; safe area on a real phone */
+    --bottom-safe:0px;
+    --ease:cubic-bezier(.32,.72,0,1);
+    --orb:94px;                /* sphere diameter ≈ 23% of screen width (per reference) */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#050606;color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+
+  /* ---------- device frame ---------- */
+  #app{position:relative;width:402px;height:874px;overflow:hidden;border-radius:56px;background:#0f1112;
+       box-shadow:0 0 0 10px #1b1c1d,0 0 0 11px #2a2b2c,0 40px 120px rgba(0,0,0,.6);transform-origin:center}
+  body.device #app{width:100vw;height:100vh;height:100dvh;border-radius:0;box-shadow:none;transform:none!important}
+  body.device{--status-h:env(safe-area-inset-top,0px);--bottom-safe:env(safe-area-inset-bottom,0px)}
+  body.device .fake-status,body.device .home-indicator{display:none}
+  body.device .status-spacer{display:block}
+
+  #bg{position:absolute;inset:0;z-index:0}
+
+  /* ---------- symbols ---------- */
+  .sym{font-family:'Material Symbols Rounded';font-weight:400;font-style:normal;line-height:1;letter-spacing:0;
+       text-transform:none;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';
+       font-variation-settings:'FILL' 0,'GRAD' 0,'opsz' 24;display:inline-block}
+  .sym.fill{font-variation-settings:'FILL' 1,'GRAD' 0,'opsz' 24}
+  .s16{font-size:16px}.s20{font-size:20px}.s24{font-size:24px;font-weight:450}
+
+  /* ---------- screens ---------- */
+  .screen{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;
+          opacity:0;pointer-events:none;transition:opacity .45s ease}
+  .screen.on{opacity:1;pointer-events:auto}
+  .screen.gone{display:none}
+
+  /* ---------- top nav ---------- */
+  .topnav{position:relative;z-index:5;width:100%;flex:none;display:flex;flex-direction:column;gap:20px;padding-bottom:20px}
+  .fake-status{height:54px;display:flex;justify-content:space-between;align-items:center;mix-blend-mode:difference}
+  .fake-status .time{width:140.5px;height:54px;position:relative}
+  .fake-status .time img{position:absolute;left:37.9%;top:42.71%;width:33.33px;height:12.58px}
+  .fake-status .levels{width:140.5px;height:54px}
+  .status-spacer{display:none;height:var(--status-h)}
+  .nav{height:40px;padding:0 20px;display:flex;align-items:center;justify-content:space-between}
+  .nav-title{width:180px;text-align:center;font-weight:500;font-size:18px;line-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .icon-btn{width:40px;height:40px;border-radius:999px;position:relative;display:flex;align-items:center;justify-content:center;flex:none;color:var(--text)}
+  .icon-btn::before{content:"";position:absolute;inset:-.2px 0 .2px 0;border-radius:999px;background:var(--surface-primary);border:1px solid var(--border-soft-primary)}
+  .icon-btn > .sym{position:relative}
+  .icon-btn:active::before{background:#232423}
+  .icon-btn.stop::before{background:var(--critical);border:0}
+  .icon-btn.stop{color:var(--invert)}
+
+  .seg{width:180px;padding:3px;display:flex;gap:2px;border-radius:32px;background:var(--surface-primary);border:1px solid var(--border-bold-primary)}
+  .seg span{flex:1;height:34px;display:flex;align-items:center;justify-content:center;border-radius:32px;font-weight:600;font-size:16px;line-height:24px}
+  .seg span.active{background:#fff;color:var(--invert)}
+  .avatar{width:40px;height:40px;border-radius:50%;display:block}
+
+  /* transcript: content scrolls under a softly blurred nav */
+  .topnav.overlay{position:absolute;top:0;left:0}
+  .topnav.overlay::before{content:"";position:absolute;inset:0 0 -24px 0;z-index:-1;
+     background:linear-gradient(rgba(15,17,18,.55),rgba(15,17,18,0));
+     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+     -webkit-mask-image:linear-gradient(#000 55%,transparent);mask-image:linear-gradient(#000 55%,transparent)}
+
+  /* ---------- chat input ---------- */
+  .chat-input{width:100%;flex:none;position:relative;z-index:3;padding:0 20px 32px;display:flex;flex-direction:column;gap:8px}
+  .field{width:100%;background:var(--surface-primary);border:1px solid var(--border-soft-secondary);border-radius:24px;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+  .field .placeholder{padding:0 4px;font-size:18px;line-height:28px;color:var(--disabled)}
+  .controls{display:flex;align-items:center;gap:4px;width:100%}
+  .controls .left{flex:1;display:flex;align-items:center;gap:10px}
+  .controls .right{display:flex;align-items:center;gap:16px}
+  .kb{display:flex;align-items:center;gap:4px;font-weight:500;font-size:14px;line-height:20px}
+  .chat-input.voice{padding:16px 20px calc(32px + var(--bottom-safe))}
+  .chat-input.voice .field{border-radius:32px}
+  .chat-input.transcript{padding-bottom:calc(32px + var(--bottom-safe))}
+
+  .suggestions{width:362px;max-width:100%;height:32px;overflow:hidden;padding:4px 16px;display:flex;flex-direction:column;gap:8px}
+  .sugg{display:flex;align-items:center;gap:8px;font-weight:500;font-size:14px;line-height:20px;white-space:nowrap}
+  .sugg .bubble{padding:4px;border-radius:999px;display:flex;color:var(--invert)}
+  .sugg .bubble .sym{font-weight:600}
+
+  /* ---------- home ---------- */
+  .home-mid{flex:1;width:100%;display:flex;align-items:center;justify-content:center;padding:0 20px 14px;min-height:0}
+  .assistant{width:362px;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .assistant img{width:45px;height:40px}
+  .assistant p{font-weight:500;font-size:28px;line-height:36px;text-align:center}
+
+  /* fake iOS keyboard (as drawn in the Home frame) */
+  .keyboard{position:relative;width:100%;height:342px;flex:none;padding:12px 0 10px;display:flex;flex-direction:column;align-items:center}
+  .keyboard::before{content:"";position:absolute;inset:0;background:var(--surface-quaternary);border-radius:24px 24px 62px 62px}
+  body.device .keyboard::before{border-radius:24px 24px 0 0}
+  .autocorrect{position:relative;height:25px;width:100%;padding:0 22px;display:flex;align-items:center;gap:20px}
+  .autocorrect span{flex:1;font-size:17px;line-height:22px;letter-spacing:-.43px;color:var(--subtext);white-space:nowrap}
+  .autocorrect i{width:1px;height:25px;background:#ccc;opacity:.1;margin:0 2px}
+  .keys{position:relative;width:100%;padding:12px 8.5px 0;display:flex;flex-direction:column;gap:11px}
+  .row{display:flex;gap:6px;width:100%;justify-content:center}
+  .row.r2{padding:0 20px}
+  .key{flex:1;height:45px;border-radius:8.5px;background:#4a4b4a;display:flex;align-items:center;justify-content:center;
+       font-family:-apple-system,'SF Compact','SF Pro',system-ui,sans-serif;font-size:25px;line-height:30px;color:var(--subtext);padding-bottom:5px}
+  .key.fn{flex:none;padding-bottom:0}
+  .key.ret{background:#0088ff;color:#fff}
+  .row.r3{gap:14.25px}.row.r3 .inner{flex:1;display:flex;gap:6px}
+  .emoji-mic{position:relative;width:100%;height:70px;padding:27px 39px 15px 36px;display:flex;justify-content:space-between;align-items:flex-start}
+
+  /* ---------- voice ---------- */
+  .voice-content{flex:1;width:100%;min-height:0;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:32px 20px}
+  .orb-slot{width:var(--orb);height:var(--orb);flex:none}
+  .listening{font-weight:500;font-size:16px;line-height:20px;text-align:center;width:100%;transition:opacity .35s ease,transform .5s var(--ease)}
+  .listening.hide{opacity:0;transform:translateY(8px)}
+
+  /* the orb lives outside the screens so it can screen-blend straight onto the background */
+  #orbWrap{position:absolute;left:50%;width:var(--orb);height:var(--orb);margin-left:calc(var(--orb) / -2);z-index:3;pointer-events:none;
+           mix-blend-mode:screen;opacity:0;transition:top .9s var(--ease),opacity .4s ease}
+  #orbWrap.on{opacity:1}
+  #orbWrap.instant{transition:opacity .4s ease}
+  #orbWrap voice-orb{position:absolute;width:260px;height:260px;left:calc(50% - 130px);top:calc(50% - 130px)}
+
+  /* voice glow: bluish light rising along the bottom and side edges while the user talks */
+  #glow{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;opacity:0;mix-blend-mode:screen}
+  #glow.fade{transition:opacity .6s ease}
+  #glow i{position:absolute;display:block;border-radius:50%;filter:blur(28px);transform-origin:50% 100%;will-change:transform,opacity;
+          background:radial-gradient(closest-side,rgba(89,190,249,.9),rgba(89,190,249,.38) 55%,rgba(89,190,249,0) 100%);
+          /* #59BEF9 as Figma shows it with a Display P3 profile */
+          background:radial-gradient(closest-side,color(display-p3 .349 .745 .976 / .9),color(display-p3 .349 .745 .976 / .38) 55%,color(display-p3 .349 .745 .976 / 0) 100%)}
+  #glow .gl{left:-20%;bottom:-10%;width:34%;height:56%;opacity:.7}
+  #glow .gr{right:-20%;bottom:-10%;width:34%;height:56%;opacity:.7}
+  #glow .gb{left:-15%;bottom:-20%;width:130%;height:40%}
+
+  /* ---------- transcript ---------- */
+  .scroller{flex:1;width:100%;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;position:relative;z-index:2;
+            padding-top:calc(var(--status-h) + 80px);user-select:text;-webkit-user-select:text}
+  .scroller::-webkit-scrollbar{display:none}
+  .thread{min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:20px;padding:32px 20px}
+  .response{display:flex;flex-direction:column;gap:20px;font-size:16px;line-height:24px}
+  .response .sub{color:var(--subtext)}
+  .response .strong{font-weight:500}
+  .response ul{color:var(--subtext);padding-left:24px}
+  .response li b{font-weight:700}
+  .actions{display:flex;align-items:center}
+  .actions .a{padding:8px;display:flex;color:var(--disabled)}
+  .actions .a .sym.fill{font-weight:500}
+  .user-msg{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .bubble-msg{background:var(--surface-tertiary);border-radius:12px;padding:16px;font-weight:500;font-size:16px;line-height:24px}
+  .fade-in{animation:fadeUp .6s var(--ease) both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .home-indicator{position:absolute;left:0;right:0;bottom:0;height:24px;z-index:9;pointer-events:none}
+  .home-indicator i{position:absolute;bottom:8px;left:calc(50% - .5px);transform:translateX(-50%);width:139px;height:5px;border-radius:100px;background:#fff}
+
+  #toast{position:absolute;left:20px;right:20px;top:calc(var(--status-h) + 88px);z-index:20;padding:10px 14px;border-radius:14px;
+         background:rgba(23,24,23,.92);border:1px solid var(--border-soft-primary);font-size:13px;line-height:18px;color:var(--subtext);
+         opacity:0;transform:translateY(-6px);transition:opacity .3s,transform .3s;pointer-events:none;text-align:center}
+  #toast.on{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bg"></div>
+
+  <!-- ================= HOME ================= -->
+  <section class="screen on" id="home" aria-label="Home">
+    <header class="topnav">
+      <div class="fake-status"><div class="time"><img src="{{ASSET:time.png}}" alt=""></div><img class="levels" src="{{ASSET:levels.png}}" alt=""></div>
+      <div class="status-spacer"></div>
+      <div class="nav">
+        <button class="icon-btn" aria-label="Menu"><span class="sym s20">menu</span></button>
+        <div class="seg"><span class="active">Ask</span><span>Explore</span></div>
+        <img class="avatar" src="{{ASSET:avatar.png}}" alt="Profile">
+      </div>
+    </header>
+    <div class="home-mid">
+      <div class="assistant">
+        <img src="{{ASSET:logo.png}}" alt="NSIQ">
+        <p>How can I help today?</p>
+      </div>
+    </div>
+    <div class="chat-input">
+      <div class="suggestions">
+        <div class="sugg"><span class="bubble" style="background:var(--ai-green)"><span class="sym fill s16">history</span></span>Continue Yesterday’s Analysis…</div>
+        <div class="sugg"><span class="bubble" style="background:var(--ai-purple)"><span class="sym fill s16">auto_awesome</span></span>Start Wednesday’s Review…</div>
+      </div>
+      <div class="field">
+        <div class="placeholder">Ask me anything…</div>
+        <div class="controls">
+          <div class="left"><button class="icon-btn" aria-label="Add"><span class="sym s24">add</span></button></div>
+          <div class="right">
+            <div class="kb">Automatic <span class="sym s16">expand_all</span></div>
+            <button class="icon-btn js-voice" aria-label="Start voice conversation"><span class="sym s24">graphic_eq</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="keyboard" aria-hidden="true">
+      <div class="autocorrect"><span>“The”</span><i></i><span style="text-align:center">the</span><i></i><span style="text-align:center">to</span></div>
+      <div class="keys">
+        <div class="row"><b class="key">q</b><b class="key">w</b><b class="key">e</b><b class="key">r</b><b class="key">t</b><b class="key">y</b><b class="key">u</b><b class="key">i</b><b class="key">o</b><b class="key">p</b></div>
+        <div class="row r2"><b class="key">a</b><b class="key">s</b><b class="key">d</b><b class="key">f</b><b class="key">g</b><b class="key">h</b><b class="key">j</b><b class="key">k</b><b class="key">l</b></div>
+        <div class="row r3">
+          <b class="key fn" style="width:44.667px"><svg width="22" height="20" viewBox="0 0 22 20" fill="none" stroke="#c7c8c8" stroke-width="1.8" stroke-linejoin="round"><path d="M11 2 2 11h4.5v7h9v-7H20z"/></svg></b>
+          <div class="inner"><b class="key">z</b><b class="key">x</b><b class="key">c</b><b class="key">v</b><b class="key">b</b><b class="key">n</b><b class="key">m</b></div>
+          <b class="key fn" style="width:45px"><svg width="26" height="20" viewBox="0 0 26 20" fill="none" stroke="#c7c8c8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M8 2h15a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 23 18H8l-6.5-8z"/><path d="m11.5 6.5 7 7m0-7-7 7"/></svg></b>
+        </div>
+        <div class="row">
+          <b class="key fn" style="width:91.667px;font-size:18px;line-height:21px">ABC</b>
+          <b class="key"></b>
+          <b class="key fn ret" style="width:92px"><svg width="22" height="18" viewBox="0 0 22 18" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M19 2v6.5a2 2 0 0 1-2 2H3"/><path d="m7.5 6-4.5 4.5L7.5 15"/></svg></b>
+        </div>
+      </div>
+      <div class="emoji-mic"><img src="{{ASSET:emoji.png}}" width="26.92" height="26.92" alt=""><img src="{{ASSET:mic.svg}}" width="18.866" height="28.213" alt=""></div>
+    </div>
+  </section>
+
+  <!-- ================= VOICE (Listening / Speaking) ================= -->
+  <section class="screen gone" id="voice" aria-label="Voice conversation">
+    <header class="topnav">
+      <div class="fake-status"><div class="time"><img src="{{ASSET:time.png}}" alt=""></div><img class="levels" src="{{ASSET:levels.png}}" alt=""></div>
+      <div class="status-spacer"></div>
+      <div class="nav">
+        <button class="icon-btn js-home" aria-label="Menu"><span class="sym s20">menu</span></button>
+        <p class="nav-title">Intro to NSIQ</p>
+        <button class="icon-btn" aria-label="More"><span class="sym s20">more_horiz</span></button>
+      </div>
+    </header>
+    <div class="voice-content" id="voiceContent">
+      <div class="orb-slot" id="orbSlot"></div>
+      <p class="listening" id="listening">Listening…</p>
+    </div>
+    <div class="chat-input voice">
+      <div class="field">
+        <div class="controls">
+          <div class="left"><button class="icon-btn" aria-label="Add"><span class="sym s24">add</span></button></div>
+          <div class="right">
+            <div class="kb">Automatic <span class="sym s16">expand_all</span></div>
+            <button class="icon-btn stop" id="stopBtn" aria-label="Stop voice conversation"><span class="sym fill s24">stop</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TRANSCRIPT ================= -->
+  <section class="screen gone" id="transcript" aria-label="Conversation transcript">
+    <header class="topnav overlay">
+      <div class="fake-status"><div class="time"><img src="{{ASSET:time.png}}" alt=""></div><img class="levels" src="{{ASSET:levels.png}}" alt=""></div>
+      <div class="status-spacer"></div>
+      <div class="nav">
+        <button class="icon-btn js-home" aria-label="Menu"><span class="sym s20">menu</span></button>
+        <p class="nav-title">Intro to NSIQ</p>
+        <button class="icon-btn" aria-label="More"><span class="sym s20">more_horiz</span></button>
+      </div>
+    </header>
+    <div class="scroller" id="scroller">
+      <div class="thread" id="thread">
+        <div class="response">
+          <p class="sub">I can help with questions about Norfolk Southern rail operations, policies, and HR, plus lookups in connected systems.</p>
+          <p class="strong">Right now, my document searches are limited to two areas:</p>
+          <p class="strong" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Other topics I can help with, by routing</p>
+          <ul><li><b>Security and compliance governance:</b> security and compliance governance content.</li></ul>
+          <ul><li><b>Railroad definitions and terminology:</b> what a railroad term, piece of equipment, acronym, or process means (for example, "What is Restricted Speed?" or "What is an Absolute Block?").</li></ul>
+          <div class="actions"><span class="a"><span class="sym fill s20">brand_awareness</span></span><span class="a"><span class="sym s20">content_copy</span></span><span class="a"><span class="sym s20">thumb_up</span></span><span class="a"><span class="sym s20">thumb_down</span></span></div>
+        </div>
+        <div class="user-msg js-new">
+          <div class="bubble-msg">How can you help me?</div>
+          <div class="actions"><span class="a"><span class="sym s20">content_copy</span></span><span class="a"><span class="sym fill s20">brand_awareness</span></span></div>
+        </div>
+        <div class="response js-new">
+          <p class="sub">I can help with questions about Norfolk Southern rail operations, policies, and HR, plus lookups in connected systems.</p>
+          <p class="strong">Right now, my document searches are limited to two areas:</p>
+          <p class="strong" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Other topics I can help with, by routing</p>
+          <ul><li><b>Security and compliance governance:</b> security and compliance governance content.</li></ul>
+          <ul><li><b>Railroad definitions and terminology:</b> what a railroad term, piece of equipment, acronym, or process means (for example, "What is Restricted Speed?" or "What is an Absolute Block?").</li></ul>
+          <div class="actions"><span class="a"><span class="sym fill s20">brand_awareness</span></span><span class="a"><span class="sym s20">content_copy</span></span><span class="a"><span class="sym s20">thumb_up</span></span><span class="a"><span class="sym s20">thumb_down</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-input transcript">
+      <div class="field">
+        <div class="placeholder">Ask me anything…</div>
+        <div class="controls">
+          <div class="left"><button class="icon-btn" aria-label="Add"><span class="sym s24">add</span></button></div>
+          <div class="right">
+            <div class="kb">Automatic <span class="sym s16">expand_all</span></div>
+            <button class="icon-btn js-voice" aria-label="Start voice conversation"><span class="sym s24">graphic_eq</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="glow" aria-hidden="true"><i class="gl"></i><i class="gr"></i><i class="gb"></i></div>
+  <div id="orbWrap"><voice-orb id="orb" intro="off" size="0.6" background="#000000" theme="dark"></voice-orb></div>
+  <div id="toast"></div>
+  <div class="home-indicator"><i></i></div>
+</div>
+
+<script>{{ORB}}</script>
+<script type="module">
+{{BALLFIELD}}
+
+// ---------------------------------------------------------------------------
+// Prototype flow: Home → (waveform) Listening → (user speaks) Speaking → (stop) Transcript
+// ---------------------------------------------------------------------------
+const $ = s => document.querySelector(s);
+const app = $('#app'), orbWrap = $('#orbWrap'), orb = $('#orb');
+const screens = { home: $('#home'), voice: $('#voice'), transcript: $('#transcript') };
+let phase = 'idle'; // idle | listening | speaking
+
+// Real phone vs. desktop preview frame
+const isDevice = () => matchMedia('(pointer: coarse)').matches && Math.min(innerWidth, innerHeight) < 600;
+function fitFrame() {
+  document.body.classList.toggle('device', isDevice());
+  if (!isDevice()) app.style.transform = `scale(${Math.min(1, (innerHeight - 40) / 874, (innerWidth - 40) / 402)})`;
+  placeOrb(true);
+}
+addEventListener('resize', fitFrame);
+fitFrame();
+
+// Background (Murmuration Lab settings): Home on the home screen, Chat inside a conversation.
+// Dark theme only. Organic ↔ Ball Action is a structural change, so the runtime cross-fades them.
+const BG_STATES = {
+  home: {
+    effect: 'organic', playing: true, centerAttenuation: 0,
+    zoom: 55, /* 1.32× */ tilt: 55, loopLength: 30,
+    gridSpacing: 2, ballSize: 4, maxBallSize: 2,
+    scatter: 9, scatterMotion: 360, scatterCycles: 1,
+    displace: -99, displaceProperty: 'centerY', displaceSwing: 70, displaceCycles: 2,
+    twistAngle: -280, twistProperty: 'radius', twistSwing: 120, twistCycles: 1,
+    rotationAxis: 'x', rotation: 0, rotationCycles: 1,
+    colors: { light: { ball: '#111111', background: '#FFFFFF' }, dark: { ball: '#737373', background: '#0E1012' } }
+  },
+  chat: {
+    effect: 'ballAction', playing: true, centerAttenuation: 0.72,
+    zoom: 50, /* 1.00× */ tilt: 0, loopLength: 30,
+    gridSpacing: 2, ballSize: 6, maxBallSize: 2.5,
+    scatter: 9, scatterMotion: 360, scatterCycles: 1,
+    displace: 0, displaceProperty: 'centerX', displaceSwing: 75, displaceCycles: 1,
+    twistAngle: 6, twistProperty: 'centerX', twistSwing: 360, twistCycles: 1,
+    rotationAxis: 'x', rotation: 0, rotationCycles: 1,
+    colors: { light: { ball: '#111111', background: '#FFFFFF' }, dark: { ball: '#EDEDED', background: '#0E1012' } }
+  }
+};
+const bg = createBallFieldBackground($('#bg'), { states: BG_STATES, initialState: 'home', theme: 'dark', transitionDuration: 1200 });
+
+// ---------- screen switching ----------
+let current = 'home';
+function show(name) {
+  if (name === current) return;
+  const prev = screens[current], next = screens[name];
+  next.classList.remove('gone');
+  void next.offsetWidth;
+  next.classList.add('on');
+  prev.classList.remove('on');
+  setTimeout(() => { if (!prev.classList.contains('on')) prev.classList.add('gone'); }, 460);
+  current = name;
+  bg.transitionTo(name === 'home' ? 'home' : 'chat');
+}
+
+// ---------- orb placement (Listening = centred with label, Speaking = bottom of content) ----------
+function placeOrb(instant) {
+  if (phase === 'idle') return;
+  const content = $('#voiceContent');
+  const appRect = app.getBoundingClientRect(), c = content.getBoundingClientRect();
+  const scale = appRect.width / app.offsetWidth || 1;
+  const top = (c.top - appRect.top) / scale, h = c.height / scale;
+  const orbSize = orbWrap.offsetHeight;
+  const y = phase === 'listening' ? top + (h - orbSize - 40) / 2 : top + h - 32 - orbSize;
+  if (instant) orbWrap.classList.add('instant');
+  orbWrap.style.top = y + 'px';
+  if (instant) { void orbWrap.offsetWidth; orbWrap.classList.remove('instant'); }
+}
+
+// ---------- audio ----------
+// The orb is the AI's voice, so it never hears the mic. The mic only drives speech detection
+// and the blue glow, through this small analyser of our own.
+let mode = null;        // 'mic' | 'sim'
+let simStart = 0, voiceStart = 0, loudFor = 0, lastT = 0, raf = 0;
+let actx = null, analyser = null, micStream = null, micSrc = null, wave = null;
+let micLevel = 0;       // smoothed voice level, 0..1 (≈ the scale the glow and detection were tuned on)
+
+async function startMic() {
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  await actx.resume();
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  analyser = actx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.6;
+  wave = new Uint8Array(analyser.fftSize);
+  micSrc = actx.createMediaStreamSource(micStream);
+  micSrc.connect(analyser);             // analysed only, never sent to the speakers
+}
+function stopMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (micSrc) micSrc.disconnect();
+  micStream = null; micSrc = null; analyser = null; micLevel = 0;
+}
+function readLevel() {
+  let target = 0;
+  if (mode === 'mic' && analyser) {
+    analyser.getByteTimeDomainData(wave);
+    let rms = 0;
+    for (let i = 0; i < wave.length; i++) { const v = (wave[i] - 128) / 128; rms += v * v; }
+    target = Math.min(1, Math.sqrt(rms / wave.length) * 6);
+  } else if (mode === 'sim') {
+    // Fallback when the mic isn't available: a synthetic voice so the flow still demos.
+    const t = (performance.now() - simStart) / 1000;
+    const syl = Math.pow(Math.abs(Math.sin(Math.PI * 4.2 * t)), 1.6);
+    const phr = Math.min(1, Math.max(0, Math.sin(2 * Math.PI * 0.3 * t) + 0.5 * Math.sin(4 * Math.PI * 0.3 * t + 1.7) + 0.6));
+    target = t > 2.4 ? 0.3 * (0.25 + 0.75 * syl) * (0.15 + 0.85 * phr) : 0;
+  }
+  micLevel += (target - micLevel) * (target > micLevel ? 0.45 : 0.07);
+  return micLevel;
+}
+
+function toast(msg, ms = 3800) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms);
+}
+
+async function startVoice() {
+  show('voice');
+  phase = 'listening';
+  $('#listening').classList.remove('hide');
+  loudFor = 0; voiceStart = performance.now();
+  orbWrap.style.display = '';
+  requestAnimationFrame(() => { placeOrb(true); orbWrap.classList.add('on'); });
+  orb.state = 'idle';
+  orb.playIntro();
+  mode = null;
+  try {
+    await startMic();                   // called straight from the tap, as iOS requires
+    mode = 'mic';
+  } catch (err) {
+    console.warn('Mic unavailable, simulating voice:', err);
+    mode = 'sim'; simStart = performance.now();
+    toast('Microphone not available here, so a simulated voice is driving the glow.');
+  }
+  cancelAnimationFrame(raf); lastT = performance.now(); raf = requestAnimationFrame(watch);
+}
+
+// Detect the user starting to talk: smoothed mic level, sustained for a moment.
+function watch(now) {
+  const dt = now - lastT; lastT = now;
+  const level = readLevel();
+  if (phase === 'listening') {
+    const ready = now - voiceStart > 1300;   // let the intro finish first
+    loudFor = ready && level > 0.18 ? loudFor + dt : Math.max(0, loudFor - dt * 0.5);
+    if (loudFor > 160) {
+      phase = 'speaking';
+      $('#listening').classList.add('hide');
+      placeOrb(false);
+    }
+  }
+  driveGlow(now, level);
+  if (phase !== 'idle') raf = requestAnimationFrame(watch);
+}
+
+// Glow: subtle while the user talks, brighter and taller with their voice, always drifting a little.
+const glow = $('#glow'), gl = glow.querySelector('.gl'), gr = glow.querySelector('.gr'), gb = glow.querySelector('.gb');
+let glowAmt = 0, glowPeak = 0;
+function driveGlow(now, level) {
+  const target = phase === 'speaking' ? 0.22 + Math.min(0.78, level * 1.15) : 0;
+  glowAmt += (target - glowAmt) * (target > glowAmt ? 0.18 : 0.05);   // quick attack, slow release
+  glowPeak += (Math.min(1, level * 1.3) - glowPeak) * 0.1;
+  const t = now / 1000;
+  glow.classList.remove('fade');
+  glow.style.opacity = glowAmt.toFixed(3);
+  const sway = (f, ph) => Math.sin(t * f + ph);
+  // sides rise up the edges as the voice gets louder, and breathe out of phase with each other
+  gl.style.transform = `translate(${(sway(0.7, 0) * 3 + glowPeak * 4).toFixed(2)}%, ${(sway(0.9, 1) * 4).toFixed(2)}%) scale(${(1 + glowPeak * 0.25).toFixed(3)}, ${(0.85 + glowPeak * 0.5 + sway(1.3, 2) * 0.05).toFixed(3)})`;
+  gr.style.transform = `translate(${(sway(0.6, 2.4) * 3 - glowPeak * 4).toFixed(2)}%, ${(sway(0.8, 0.3) * 4).toFixed(2)}%) scale(${(1 + glowPeak * 0.25).toFixed(3)}, ${(0.85 + glowPeak * 0.5 + sway(1.1, 4) * 0.05).toFixed(3)})`;
+  gb.style.transform = `translate(${(sway(0.5, 1.2) * 6).toFixed(2)}%, 0) scale(${(1 + glowPeak * 0.15).toFixed(3)}, ${(0.8 + glowPeak * 0.7).toFixed(3)})`;
+}
+function fadeGlow() { glowAmt = 0; glowPeak = 0; glow.classList.add('fade'); glow.style.opacity = '0'; }
+
+function stopVoice() {
+  stopMic();
+  mode = null; phase = 'idle';
+  cancelAnimationFrame(raf);
+  hideOrb(); fadeGlow();
+  show('transcript');
+  const s = $('#scroller');
+  document.querySelectorAll('.js-new').forEach((el, i) => {
+    el.classList.remove('fade-in'); void el.offsetWidth;
+    el.style.animationDelay = (0.15 + i * 0.18) + 's'; el.classList.add('fade-in');
+  });
+  requestAnimationFrame(() => { s.scrollTop = s.scrollHeight; });
+}
+
+// Park the orb (display:none stops its render loop) once it has faded out.
+function hideOrb() {
+  orbWrap.classList.remove('on');
+  setTimeout(() => { if (!orbWrap.classList.contains('on')) orbWrap.style.display = 'none'; }, 450);
+}
+hideOrb();
+
+function goHome() {
+  if (phase !== 'idle') { stopMic(); mode = null; phase = 'idle'; hideOrb(); fadeGlow(); }
+  show('home');
+}
+
+document.querySelectorAll('.js-voice').forEach(b => b.addEventListener('click', startVoice));
+document.querySelectorAll('.js-home').forEach(b => b.addEventListener('click', goHome));
+$('#stopBtn').addEventListener('click', stopVoice);
+</script>
+</body>
+</html>
