@@ -335,7 +335,7 @@ addEventListener('resize', fitFrame);
 fitFrame();
 
 // Background (Murmuration Lab settings): Home on the home screen, Chat inside a conversation.
-// Dark theme only. Organic ↔ Ball Action is a structural change, so the runtime cross-fades them.
+// Dark theme only. The two states differ only in centre attenuation, which the runtime eases over 1200 ms.
 const BG_STATES = {
   home: {
     effect: 'organic', playing: true, centerAttenuation: 0,
@@ -347,17 +347,10 @@ const BG_STATES = {
     rotationAxis: 'x', rotation: 0, rotationCycles: 1,
     colors: { light: { ball: '#111111', background: '#FFFFFF' }, dark: { ball: '#737373', background: '#0E1012' } }
   },
-  chat: {
-    effect: 'ballAction', playing: true, centerAttenuation: 0.72,
-    zoom: 50, /* 1.00× */ tilt: 0, loopLength: 30,
-    gridSpacing: 2, ballSize: 6, maxBallSize: 2.5,
-    scatter: 9, scatterMotion: 360, scatterCycles: 1,
-    displace: 0, displaceProperty: 'centerX', displaceSwing: 75, displaceCycles: 1,
-    twistAngle: 6, twistProperty: 'centerX', twistSwing: 360, twistCycles: 1,
-    rotationAxis: 'x', rotation: 0, rotationCycles: 1,
-    colors: { light: { ball: '#111111', background: '#FFFFFF' }, dark: { ball: '#EDEDED', background: '#0E1012' } }
-  }
+  // Chat = Home with the centre attenuated (0.8) so the conversation reads over the field
+  chat: null
 };
+BG_STATES.chat = { ...BG_STATES.home, centerAttenuation: 0.8 };
 const bg = createBallFieldBackground($('#bg'), { states: BG_STATES, initialState: 'home', theme: 'dark', transitionDuration: 1200 });
 
 // ---------- screen switching ----------
